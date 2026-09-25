@@ -315,7 +315,7 @@ $remoteQuery = {
     $rows        = New-Object System.Collections.Generic.List[object]
     $auditCapped = $false
 
-    function Get-ChannelEvents {
+    function Get-ChannelEvent {
         param([string]$LogName, [int[]]$Levels, [hashtable]$ExtraFilter, [int]$MaxEvents = 0)
 
         try {
@@ -345,7 +345,7 @@ $remoteQuery = {
         }
     }
 
-    function Add-Rows {
+    function Add-EventRow {
         param($Events, [string]$LogName, [string]$LevelOverride)
         foreach ($e in $Events) {
             # Bug fix: collapse line breaks FIRST, then truncate the resulting string.
@@ -401,11 +401,11 @@ $remoteQuery = {
     # --- Mode 4: Security Audit Failures ONLY (Level 0, filtered on Keywords), capped ---
     if ($Mode -eq 4) {
         Write-Host "--- Querying Security Audit Failures (newest $AuditFailureCap max) ---" -ForegroundColor Cyan
-        $audit = Get-ChannelEvents -LogName 'Security' -ExtraFilter @{ Keywords = [long]4503599627370496 } -MaxEvents $AuditFailureCap
+        $audit = Get-ChannelEvent -LogName 'Security' -ExtraFilter @{ Keywords = [long]4503599627370496 } -MaxEvents $AuditFailureCap
         if ($audit.Count -gt 0) {
             $auditCapped = ($audit.Count -ge $AuditFailureCap)
             Write-Host "  [OK] Security - $($audit.Count) Audit Failure event(s) found$(if ($auditCapped) { ' (CAP REACHED - older ones omitted)' })." -ForegroundColor Green
-            Add-Rows -Events $audit -LogName 'Security' -LevelOverride 'Audit Failure'
+            Add-EventRow -Events $audit -LogName 'Security' -LevelOverride 'Audit Failure'
         }
         Write-Host ""
         $rows.ToArray()
@@ -417,10 +417,10 @@ $remoteQuery = {
     Write-Host "--- Querying Classic Logs ---" -ForegroundColor Cyan
     foreach ($log in $ClassicLogs) {
         Write-Host "  Querying: $log" -ForegroundColor White
-        $events = Get-ChannelEvents -LogName $log -Levels $ClassicLevels
+        $events = Get-ChannelEvent -LogName $log -Levels $ClassicLevels
         if ($events.Count -gt 0) {
             Write-Host "  [OK] $log - $($events.Count) event(s) found." -ForegroundColor Green
-            Add-Rows -Events $events -LogName $log
+            Add-EventRow -Events $events -LogName $log
         }
     }
     Write-Host ""
@@ -431,10 +431,10 @@ $remoteQuery = {
         Write-Host "--- Querying $sectionLabel ---" -ForegroundColor Cyan
         foreach ($channel in $namedChannels) {
             Write-Host "  Querying: $channel" -ForegroundColor White
-            $events = Get-ChannelEvents -LogName $channel -Levels $ChannelLevels
+            $events = Get-ChannelEvent -LogName $channel -Levels $ChannelLevels
             if ($events.Count -gt 0) {
                 Write-Host "  [OK] $channel - $($events.Count) event(s) found." -ForegroundColor Green
-                Add-Rows -Events $events -LogName $channel
+                Add-EventRow -Events $events -LogName $channel
             }
         }
         Write-Host ""

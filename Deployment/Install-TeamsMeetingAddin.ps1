@@ -194,7 +194,8 @@ catch {
 
 Write-Host "Verifying staged file, then closing Outlook/Teams and running --installTMA on '$ComputerName'...`n" -ForegroundColor Cyan
 
-$result = Invoke-Command -ComputerName $ComputerName -ArgumentList $StagingDir, $BootName, $SourceHashes -ScriptBlock {
+# Runs ON THE TARGET (stored in a variable, like the other scripts' remote blocks).
+$InstallTmaBlock = {
     param($StagingDir, $BootName, $SourceHashes)
 
     $out = [pscustomobject]@{ Status = 'Failed'; Code = $null; Closed = @(); Output = ''; Message = '' }
@@ -250,6 +251,9 @@ $result = Invoke-Command -ComputerName $ComputerName -ArgumentList $StagingDir, 
 
     return $out
 }
+
+$result = Invoke-Command -ComputerName $ComputerName -ScriptBlock $InstallTmaBlock `
+    -ArgumentList $StagingDir, $BootName, $SourceHashes
 
 # ------------------------- Report -------------------------
 

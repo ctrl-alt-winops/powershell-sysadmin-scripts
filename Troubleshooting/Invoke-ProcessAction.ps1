@@ -164,7 +164,7 @@ $StartInSession = {
 
 # ============================ Local helpers ============================
 
-function Show-Matches {
+function Show-ProcessMatch {
     param($List)
     $List | Sort-Object UserName, Id |
         Format-Table Id, UserName, SessionId, @{ N = 'Started'; E = { if ($_.StartTime) { ([datetime]$_.StartTime).ToString('yyyy-MM-dd HH:mm') } } }, Path -AutoSize |
@@ -258,7 +258,7 @@ if ($found.Count -eq 0) {
 }
 else {
     Write-Host "`n$($found.Count) process(es) found:" -ForegroundColor Cyan
-    Show-Matches -List $found
+    Show-ProcessMatch -List $found
 }
 
 # Restart: decide what to start afterwards. Default = the path of the running

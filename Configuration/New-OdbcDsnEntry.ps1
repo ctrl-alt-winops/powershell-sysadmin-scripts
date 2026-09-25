@@ -36,8 +36,8 @@
 .NOTES
     Execution : from an admin workstation, against a remote machine
     Requires  : WinRM enabled on the target, admin rights on the target
-    Changes   : Yes - adds or remove ODBC connections to the user's session and/or system session. 
-    
+    Changes   : Yes - adds or remove ODBC connections to the user's session and/or system session.
+
     Detailed requirements:
     - Admin rights on the target + WinRM enabled (domain-joined machines /
       Kerberos; workgroup targets need extra WinRM configuration).
@@ -101,7 +101,7 @@ $ListDsns = {
         (Get-ItemProperty -LiteralPath "$base\$Driver" -ErrorAction SilentlyContinue).Driver
     }
 
-    function Read-OdbcIni($Root, $Type, $Platform) {
+    function Read-OdbcIni($Root, $Type, $Platform, [string[]]$MaskKeys) {
         $srcKey = "$Root\ODBC Data Sources"
         if (-not (Test-Path -LiteralPath $srcKey)) { return }
         $src = Get-ItemProperty -LiteralPath $srcKey
@@ -114,14 +114,14 @@ $ListDsns = {
                 foreach ($p in $vals.PSObject.Properties) {
                     if ($psProps -contains $p.Name) { continue }
                     if ($p.Name -eq 'Driver') { $dll = $p.Value; continue }
-                    $v = if ($SecretKeys -contains $p.Name.ToLower()) { '********' } else { $p.Value }
+                    $v = if ($MaskKeys -contains $p.Name.ToLower()) { '********' } else { $p.Value }
                     $settings += "$($p.Name)=$v"
                 }
             }
             $plat = $Platform
             if (-not $plat) {
-                if     ($dll -and $dll -eq (Get-DriverDll $driver $true))  { $plat = '32-bit' }
-                elseif ($dll -and $dll -eq (Get-DriverDll $driver $false)) { $plat = '64-bit' }
+                if     ($dll -and $dll -eq (Get-DriverDll -Driver $driver -Wow $true))  { $plat = '32-bit' }
+                elseif ($dll -and $dll -eq (Get-DriverDll -Driver $driver -Wow $false)) { $plat = '64-bit' }
                 else   { $plat = '?' }
             }
             [pscustomobject]@{ Name = $name; Type = $Type; Platform = $plat; Driver = $driver; Settings = ($settings -join '; ') }
@@ -129,11 +129,11 @@ $ListDsns = {
     }
 
     if ($Scopes -contains 'System') {
-        Read-OdbcIni 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\ODBC\ODBC.INI'             'System' '64-bit'
-        Read-OdbcIni 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\ODBC\ODBC.INI' 'System' '32-bit'
+        Read-OdbcIni -Root 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\ODBC\ODBC.INI'             -Type 'System' -Platform '64-bit' -MaskKeys $SecretKeys
+        Read-OdbcIni -Root 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\ODBC\ODBC.INI' -Type 'System' -Platform '32-bit' -MaskKeys $SecretKeys
     }
     if ($Scopes -contains 'User' -and $Sid) {
-        Read-OdbcIni "Registry::HKEY_USERS\$Sid\Software\ODBC\ODBC.INI" 'User' $null
+        Read-OdbcIni -Root "Registry::HKEY_USERS\$Sid\Software\ODBC\ODBC.INI" -Type 'User' -Platform $null -MaskKeys $SecretKeys
     }
 }
 
@@ -260,14 +260,14 @@ function Confirm-YesNo {
     return ($a -eq 'YES')
 }
 
-function Show-Dsns {
+function Show-DsnTable {
     param($Rows)
     $Rows | Sort-Object Type, Name, Platform |
         Format-Table Name, Type, Platform, Driver, Settings -AutoSize -Wrap |
         Out-String -Width 220 | Write-Host
 }
 
-function Show-Results {
+function Show-ActionResult {
     param($Results)
     foreach ($r in $Results) {
         if ($r.Result -eq 'OK') { Write-Host "  OK   : $($r.Name)" -ForegroundColor Green }
@@ -358,7 +358,7 @@ while ($true) {
         Write-Host ''
         if ($rows.Count -eq 0) { Write-Host 'No DSN found.' -ForegroundColor Yellow; return 0 }
         Write-Host "$($rows.Count) DSN(s) on '$ComputerName'$(if ($TargetUser) { " (User DSNs for '$TargetUser')" }):" -ForegroundColor Cyan
-        Show-Dsns $rows
+        Show-DsnTable $rows
         return 0
     }
 
@@ -389,7 +389,7 @@ while ($true) {
             $res = @(Invoke-Command -ComputerName $ComputerName -ScriptBlock $RemoveUserDsns -ArgumentList $Sid, ([string[]]@($sel.Name | Select-Object -Unique)))
         }
         Write-Host "`nResults:" -ForegroundColor Cyan
-        Show-Results $res
+        Show-ActionResult $res
 
         # Read-back: nothing selected should still be listed
         $after = @(Invoke-Command -ComputerName $ComputerName -ScriptBlock $ListDsns -ArgumentList $Scopes, $Sid, $SecretKeys)
@@ -467,7 +467,7 @@ while ($true) {
     $Replace = @()
     if ($existingRows.Count -gt 0) {
         Write-Host "`nAlready existing ($DsnType$(if ($DsnType -eq 'System') { ", $Platform" })):" -ForegroundColor Yellow
-        Show-Dsns $existingRows
+        Show-DsnTable $existingRows
         do { $a = (Read-Host '[S]kip them / [R]eplace them / [A]bort').Trim().ToUpper() } while ($a -notin 'S', 'R', 'A')
         switch ($a) {
             'A' { Write-Host 'Aborted by operator. Nothing done.' -ForegroundColor Yellow; return 1 }
@@ -500,7 +500,7 @@ while ($true) {
             $rem = @(Invoke-Command -ComputerName $ComputerName -ScriptBlock $RemoveUserDsns -ArgumentList $Sid, ([string[]]$Replace))
             if ($rem | Where-Object Result -ne 'OK') {
                 Write-Host "`nERROR: could not remove the DSN(s) to replace - nothing created:" -ForegroundColor Red
-                Show-Results $rem
+                Show-ActionResult $rem
                 return 1
             }
         }
@@ -546,13 +546,13 @@ while ($true) {
     }
 
     Write-Host "`nResults:" -ForegroundColor Cyan
-    if ($res.Count -eq 0) { Write-Host '  (no per-DSN result returned)' -ForegroundColor Red } else { Show-Results $res }
+    if ($res.Count -eq 0) { Write-Host '  (no per-DSN result returned)' -ForegroundColor Red } else { Show-ActionResult $res }
 
     # --- Read-back (what the driver actually stored) ---
     $after = @(Invoke-Command -ComputerName $ComputerName -ScriptBlock $ListDsns -ArgumentList $Scopes, $Sid, $SecretKeys |
                Where-Object { $Names -contains $_.Name })
     Write-Host "`nRead-back from '$ComputerName':" -ForegroundColor Cyan
-    if ($after.Count -gt 0) { Show-Dsns $after } else { Write-Host '  none of the DSNs are present.' -ForegroundColor Red }
+    if ($after.Count -gt 0) { Show-DsnTable $after } else { Write-Host '  none of the DSNs are present.' -ForegroundColor Red }
 
     $okCount = @($res | Where-Object Result -eq 'OK').Count
     if ($okCount -eq $Names.Count -and $after.Count -ge $Names.Count) { Write-Host 'SUCCESS : all DSNs created and confirmed by read-back.' -ForegroundColor Green; return 0 }

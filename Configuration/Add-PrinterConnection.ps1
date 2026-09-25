@@ -73,9 +73,8 @@ catch {
 
 Write-Host "Adding printers for '$TargetUser' on '$ComputerName'...`n" -ForegroundColor Cyan
 
-$result = Invoke-Command -ComputerName $ComputerName `
-    -ArgumentList $TargetUser, $TaskName, ($PrinterPaths -join '|'), $TimeoutSec `
-    -ScriptBlock {
+# Runs ON THE TARGET (stored in a variable, like the other scripts' remote blocks).
+$AddPrintersBlock = {
     param($TargetUser, $TaskName, $PrinterList, $TimeoutSec)
 
     $out = [pscustomobject]@{ Status = 'Failed'; Code = $null; Log = ''; Message = '' }
@@ -172,6 +171,9 @@ exit `$fail
 
     return $out
 }
+
+$result = Invoke-Command -ComputerName $ComputerName -ScriptBlock $AddPrintersBlock `
+    -ArgumentList $TargetUser, $TaskName, ($PrinterPaths -join '|'), $TimeoutSec
 
 # ------------------------- Report -------------------------
 
