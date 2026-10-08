@@ -1,17 +1,18 @@
 # powershell-sysadmin-scripts
 
-Interactive PowerShell tools for Windows helpdesk and administration tasks: deployment, printer and ODBC configuration, remote troubleshooting (event logs, processes, machine health, AD sign-in failures and lockouts) and read-only security audits (disabled AD accounts, Exchange Online mail forwarding).
+Interactive PowerShell tools for Windows helpdesk and administration tasks: deployment, printer and ODBC configuration, remote troubleshooting (event logs, processes, machine health, software inventory, AD sign-in failures and lockouts) and read-only security audits (disabled AD accounts, Exchange Online mail forwarding).
 
 ## Scripts
 
 | Script | Folder | Runs | Changes state | Description |
 |---|---|:---:|:---:|---|
 | [Install-TeamsMeetingAddin](Deployment/Install-TeamsMeetingAddin.ps1) | Deployment | Remote (WinRM) | Yes | Installs the Teams Meeting Add-in (new Teams). ⚠️ Closes Outlook and Teams on the target |
-| [Add-PrinterConnection](Configuration/Add-PrinterConnection.ps1) | Configuration | Remote (WinRM) | Yes | Adds network printers to a user's session |
+| [Invoke-PrinterAction](Configuration/Invoke-PrinterAction.ps1) | Configuration | Remote (WinRM) | Yes | Adds or removes a user's printers and changes their default printer, from one menu. ⚠️ Turns off "Let Windows manage my default printer" for the user |
 | [New-OdbcDsnEntry](Configuration/New-OdbcDsnEntry.ps1) | Configuration | Remote (WinRM) | Yes | Creates ODBC DSN entries |
 | [Export-EventLogReport](Troubleshooting/Export-EventLogReport.ps1) | Troubleshooting | Remote (WinRM) | No | Queries event logs for a time window and exports an HTML report |
 | [Invoke-ProcessAction](Troubleshooting/Invoke-ProcessAction.ps1) | Troubleshooting | Remote (WinRM) | Yes | Starts, stops or restarts a process |
 | [Export-MachineHealthReport](Troubleshooting/Export-MachineHealthReport.ps1) | Troubleshooting | Remote (WinRM) | No | Health snapshot of a machine: uptime, disks, pending reboot, sessions, top programs, network, Group Policy, antivirus |
+| [Export-SoftwareInventoryReport](Troubleshooting/Export-SoftwareInventoryReport.ps1) | Troubleshooting | Remote (WinRM) | No | Lists installed programs and Store apps on a machine, or compares two machines (HTML + CSV) |
 | [Export-ADSignInFailureReport](Troubleshooting/Export-ADSignInFailureReport.ps1) | Troubleshooting | DCs (WinRM) | No | Investigates one account's failed sign-ins and lockouts: status, failure sources, and what still uses the old password |
 | [Export-ADLockoutReport](Troubleshooting/Export-ADLockoutReport.ps1) | Troubleshooting | DCs (WinRM) | No | Domain-wide lockout overview: locked accounts, caller computers, accounts still locked |
 | [Export-ADDisabledAccountReport](Auditing/Export-ADDisabledAccountReport.ps1) | Auditing | Local (AD query) | No | Lists disabled AD user accounts, flagging those still in groups |
@@ -27,6 +28,7 @@ All scripts are interactive: they prompt for the target machine, user or scope a
 
 | Script | Needs |
 |---|---|
+| Invoke-PrinterAction | Target user logged on (their profile must be loaded); printer drivers already present on the machine |
 | Export-ADSignInFailureReport, Export-ADLockoutReport | RSAT ActiveDirectory module; rights to read the DCs' Security log (Domain Admins, or Event Log Readers + WinRM access); failure auditing of Kerberos Authentication Service and Credential Validation on the DCs |
 | Export-ADDisabledAccountReport | RSAT ActiveDirectory module (any domain account can run it) |
 | Export-MailboxForwardingReport | ExchangeOnlineManagement module v3+; an Exchange Online role that can read mailboxes, inbox rules and permissions. PowerShell 7 for `-SignIn DeviceCode` |
@@ -37,13 +39,13 @@ Full details for each script: `Get-Help .\<script>.ps1 -Full`.
 
 1. Download the script.
 2. Unblock it, since files downloaded from the internet may be blocked by the execution policy:
-   ```powershell
-   Unblock-File .\Add-PrinterConnection.ps1
-   ```
+```powershell
+   Unblock-File .\Invoke-PrinterAction.ps1
+```
 3. Read the built-in help:
-   ```powershell
-   Get-Help .\Add-PrinterConnection.ps1 -Full
-   ```
+```powershell
+   Get-Help .\Invoke-PrinterAction.ps1 -Full
+```
 4. Run it and follow the prompts.
 
 ## Disclaimer
